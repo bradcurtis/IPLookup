@@ -5,9 +5,12 @@ public class IpNetwork
 {
     public IPAddress NetworkAddress { get; private set; }
     public IPAddress Netmask { get; private set; }
+    public IPAddress BroadcastAddress { get; private set; }
     public int Cidr { get; private set; }
+
     private uint networkInt;
     private uint maskInt;
+    private uint broadcastInt;
 
     public IpNetwork(string cidr)
     {
@@ -32,15 +35,18 @@ public class IpNetwork
         this.Cidr = prefix;
         this.maskInt = prefix == 0 ? 0 : (uint)(0xFFFFFFFF << (32 - prefix));
         this.networkInt = ToUInt32(ip) & maskInt;
+        this.broadcastInt = networkInt | ~maskInt;
+
         this.NetworkAddress = FromUInt32(networkInt);
         this.Netmask = FromUInt32(maskInt);
+        this.BroadcastAddress = FromUInt32(broadcastInt);
     }
 
     public bool Contains(IPAddress ip)
     {
         if (ip.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork) return false;
         var ipInt = ToUInt32(ip);
-        return (ipInt & maskInt) == networkInt;
+        return ipInt >= networkInt && ipInt <= broadcastInt;
     }
 
     public static bool TryParse(string cidr, out IpNetwork net)

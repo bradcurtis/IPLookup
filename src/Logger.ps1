@@ -6,13 +6,17 @@ class Logger {
     [bool]   $ToFile
     [string] $FilePath
 
-    hidden [int] MapLevel([string] $level) {
-        if ($level -eq 'Error') { return 1 }
-        elseif ($level -eq 'Warn') { return 2 }
-        elseif ($level -eq 'Info') { return 3 }
-        elseif ($level -eq 'Debug') { return 4 }
-        else { return 3 }
+   hidden [int] MapLevel([string] $level) {
+    switch ($level) {
+        'Error' { return 1 }
+        'Warn'  { return 2 }
+        'Info'  { return 3 }
+        'Debug' { return 4 }
+        default { return 3 }
     }
+    return 3  # <-- ensures all paths return
+}
+
 
     Logger([string] $level = 'Info', [bool] $toFile = $false, [string] $filePath = '') {
         $this.Level    = $level
@@ -37,9 +41,13 @@ class Logger {
             if ($this.ToFile) {
                 Add-Content -Path $this.FilePath -Value $line
             } else {
-                if ($level -eq 'Error') { Write-Error $line }
-                elseif ($level -eq 'Warn') { Write-Warning $line }
-                else { Write-Host $line }
+                switch ($level) {
+                    'Error' { Write-Error   $line }
+                    'Warn'  { Write-Warning $line }
+                    'Info'  { Write-Output  $line }   # <-- changed from Write-Host
+                    'Debug' { Write-Verbose $line }   # <-- visible with -Verbose
+                    
+                }
             }
         }
     }
