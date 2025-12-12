@@ -3,7 +3,9 @@
 
 BeforeAll {
     # Load all classes and utilities
-    . (Join-Path $PSScriptRoot '..\src\AllClasses.ps1')
+    if (-not ("Logger" -as [type])) {
+        . (Join-Path $PSScriptRoot '..\src\AllClasses.ps1')
+    }
 
     # Create a logger instance
     $global:logger = [Logger]::new("Info", $false, "")

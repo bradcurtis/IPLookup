@@ -88,7 +88,7 @@ function New-IpExpression {
         $Logger.Info("Parsed CIDR $Raw → $($expr.Network.NetworkAddress)-$($expr.Network.BroadcastAddress)")
         return $expr
     } catch {
-        $Logger.Warn("CIDR parse failed for '$Raw': $_")
+       # $Logger.Warn("CIDR parse failed for '$Raw': $_")
     }
 
     try {
@@ -97,7 +97,7 @@ function New-IpExpression {
         $Logger.Info("Parsed range $Raw → $($expr.Start)-$($expr.End)")
         return $expr
     } catch {
-        $Logger.Warn("Range parse failed for '$Raw': $_")
+      #  $Logger.Warn("Range parse failed for '$Raw': $_")
     }
 
     try {

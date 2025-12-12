@@ -1,7 +1,9 @@
 Describe 'LookupService with multiple CSV files' {
     BeforeAll {
         # Load all class definitions first
+        .if (-not ("Logger" -as [type])) {
         . (Join-Path $PSScriptRoot '..\src\AllClasses.ps1')
+    }
 
         $logger  = [Logger]::new('Debug', $false, '')
         $paths   = @(

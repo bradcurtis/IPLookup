@@ -1,7 +1,10 @@
 Import-Module (Join-Path $PSScriptRoot 'Tests.psm1') -Force
 
 BeforeAll {
-    . (Join-Path $PSScriptRoot '..\src\AllClasses.ps1')
+    
+    if (-not ("Logger" -as [type])) {
+        . (Join-Path $PSScriptRoot '..\src\AllClasses.ps1')
+    }
 }
 
 

@@ -1,6 +1,8 @@
 Describe 'LookupService existence checks' {
     BeforeAll {
+        if (-not ("Logger" -as [type])) {
         . (Join-Path $PSScriptRoot '..\src\AllClasses.ps1')
+    }
 
         $logger = [Logger]::new('Debug', $false, '')
         $repo   = [CsvRepository]::new((Join-Path $PSScriptRoot '..\data\ip-expressions.csv'))

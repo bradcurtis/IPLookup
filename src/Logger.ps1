@@ -56,4 +56,12 @@ class Logger {
     [void] Warn ([string] $message) { $this.Write('Warn',  $message) }
     [void] Info ([string] $message) { $this.Write('Info',  $message) }
     [void] Debug([string] $message) { $this.Write('Debug', $message) }
+
+    [bool] ShouldLogInfo() {
+    return $this.MapLevel($this.Level) -ge $this.MapLevel("Info")
+}
+[bool] ShouldLog([string] $level) {
+    return $this.MapLevel($this.Level) -ge $this.MapLevel($level)
+}
+
 }

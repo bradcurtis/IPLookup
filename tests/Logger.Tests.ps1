@@ -1,6 +1,8 @@
 Describe 'Logger behavior' {
     BeforeAll {
+        if (-not ("Logger" -as [type])) {
         . (Join-Path $PSScriptRoot '..\src\AllClasses.ps1')
+    }
     }
 
     It 'writes Info messages to host' {

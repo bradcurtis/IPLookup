@@ -15,9 +15,7 @@ function Get-IpExpressionsFromFile {
         if (-not $trimmed) { continue }
 
         try {
-            # Use the proven parser from IpExpressions.ps1
             $expr = New-IpExpression $trimmed $Logger
-
             $entry = [PSCustomObject]@{
                 File       = $Path
                 Line       = $i
@@ -26,7 +24,6 @@ function Get-IpExpressionsFromFile {
             }
             $results += $entry
 
-            # Validate normalization
             if ($null -eq (Get-NormalizedRange $expr $Logger)) {
                 $Logger.Warn("Invalid or incomplete expression at ${Path} line ${i}: ${trimmed}")
             }
@@ -55,9 +52,11 @@ function Compare-TwoIpFiles {
             if ($norm1.Start -eq $norm2.Start -and $norm1.End -eq $norm2.End) {
                 if ($entry.Expression.Raw -eq $other.Expression.Raw) {
                     $status = "Exact"; $exactCount++
-                    $Report.Value += [PSCustomObject]@{
-                        ComparisonType="Exact"; File1=$File1; Line1=$entry.Line; Expression1=$entry.Expression.Raw;
-                        File2=$File2; Line2=$other.Line; Expression2=$other.Expression.Raw
+                    if ($Logger.ShouldLog("Info")) {
+                        $Report.Value += [PSCustomObject]@{
+                            ComparisonType="Exact"; File1=$File1; Line1=$entry.Line; Expression1=$entry.Expression.Raw;
+                            File2=$File2; Line2=$other.Line; Expression2=$other.Expression.Raw
+                        }
                     }
                 } else {
                     $status = "Overlap"; $overlapCount++
@@ -90,7 +89,6 @@ function Compare-TwoIpFiles {
         }
     }
 
-    # Mirror check for exprs2 vs exprs1
     foreach ($entry in $exprs2) {
         $norm2 = Get-NormalizedRange $entry.Expression $Logger
         if ($null -eq $norm2) { continue }
@@ -103,9 +101,11 @@ function Compare-TwoIpFiles {
             if ($norm1.Start -eq $norm2.Start -and $norm1.End -eq $norm2.End) {
                 if ($entry.Expression.Raw -eq $other.Expression.Raw) {
                     $status = "Exact"; $exactCount++
-                    $Report.Value += [PSCustomObject]@{
-                        ComparisonType="Exact"; File1=$File2; Line1=$entry.Line; Expression1=$entry.Expression.Raw;
-                        File2=$File1; Line2=$other.Line; Expression2=$other.Expression.Raw
+                    if ($Logger.ShouldLog("Info")) {
+                        $Report.Value += [PSCustomObject]@{
+                            ComparisonType="Exact"; File1=$File2; Line1=$entry.Line; Expression1=$entry.Expression.Raw;
+                            File2=$File1; Line2=$other.Line; Expression2=$other.Expression.Raw
+                        }
                     }
                 } else {
                     $status = "Overlap"; $overlapCount++
