@@ -1,9 +1,9 @@
 Describe 'LookupService with multiple CSV files' {
     BeforeAll {
-        # Load all class definitions first
-        .if (-not ("Logger" -as [type])) {
+        if (-not ("Logger" -as [type])) {
         . (Join-Path $PSScriptRoot '..\src\AllClasses.ps1')
     }
+    
 
         $logger  = [Logger]::new('Debug', $false, '')
         $paths   = @(
@@ -27,7 +27,7 @@ Describe 'LookupService with multiple CSV files' {
     }
 
     It 'rejects IP outside both files' {
-        $service.Exists('8.8.8.8') | Should -BeFalse
+       $service.Exists('8.8.8.8').Found | Should -BeFalse
     }
 
     It 'finds IP inside second file CIDR' {

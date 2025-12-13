@@ -1,23 +1,23 @@
 Describe 'LookupService existence checks' {
-    BeforeAll {
-        if (-not ("Logger" -as [type])) {
+BeforeAll {
+    if (-not ("Logger" -as [type])) {
         . (Join-Path $PSScriptRoot '..\src\AllClasses.ps1')
     }
 
-        $logger = [Logger]::new('Debug', $false, '')
-        $repo   = [CsvRepository]::new((Join-Path $PSScriptRoot '..\data\ip-expressions.csv'))
-        $repo.Load($logger)
-        $service = [LookupService]::new($repo, $logger)
+    $logger = [Logger]::new('Debug', $false, '')
+    $paths  = @((Join-Path $PSScriptRoot '..\data\ip-expressions.csv'))
+    $service = [LookupService]::new($paths, $logger)
 
-        Set-Variable -Name service -Value $service -Scope Global
-    }
+    Set-Variable -Name service -Value $service -Scope Global
+}
+
 
     It 'finds IP inside CIDR' {
         $service.Exists('192.168.1.10') | Should -BeTrue
     }
 
     It 'rejects IP outside CIDR' {
-        $service.Exists('192.168.2.5') | Should -BeFalse
+        $service.Exists('192.168.2.5').Found | Should -BeFalse
     }
 
     It 'finds IP inside range' {

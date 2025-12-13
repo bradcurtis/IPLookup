@@ -11,11 +11,13 @@ Describe 'Logger behavior' {
         $true | Should -BeTrue
     }
 
+   <#
+    Removing for pester test output file #>
     It 'writes Error messages to host' {
         $logger = [Logger]::new('Error', $false, '')
-        $logger.Error("Test error message")
+        $logger.Error("[EXPECTED] Logger test error message")
         $true | Should -BeTrue
-    }
+    }<# #>#>
 
     It 'respects log level threshold' {
         $logger = [Logger]::new('Warn', $false, '')
