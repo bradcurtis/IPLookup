@@ -79,8 +79,8 @@ function New-IpExpression {
     $Raw = $Raw -replace '\u00A0',' '       # replace non-breaking space
     $Raw = $Raw -replace '\r',''            # strip carriage returns
     $Raw = $Raw -replace '\s+',' '          # collapse whitespace
-
-    $Logger.Info("Attempting to parse expression: '$Raw'")
+     if ($logger.ShouldLog("Info")) {
+    $Logger.Info("Attempting to parse expression: '$Raw'") }
 
     try {
         $Logger.Info("Trying CIDR parse: '$Raw'")
@@ -88,25 +88,32 @@ function New-IpExpression {
         $Logger.Info("Parsed CIDR $Raw → $($expr.Network.NetworkAddress)-$($expr.Network.BroadcastAddress)")
         return $expr
     } catch {
-       # $Logger.Warn("CIDR parse failed for '$Raw': $_")
+        if ($logger.ShouldLog("Info")) {
+        $Logger.Info("CIDR parse failed for '$Raw': $_") }
     }
 
     try {
-        $Logger.Info("Trying range parse: '$Raw'")
+        if ($logger.ShouldLog("Info")) {
+        $Logger.Info("Trying range parse: '$Raw'") }
         $expr = [RangeIpExpression]::new($Raw)
-        $Logger.Info("Parsed range $Raw → $($expr.Start)-$($expr.End)")
+        if ($logger.ShouldLog("Info")) {
+        $Logger.Info("Parsed range $Raw → $($expr.Start)-$($expr.End)") }
         return $expr
     } catch {
-      #  $Logger.Warn("Range parse failed for '$Raw': $_")
+        if ($logger.ShouldLog("Info")) {
+        $Logger.Info("Range parse failed for '$Raw': $_") }
     }
 
     try {
-        $Logger.Info("Trying single IP parse: '$Raw'")
+        if ($logger.ShouldLog("Info")) {
+        $Logger.Info("Trying single IP parse: '$Raw'") }
         $expr = [SingleIpExpression]::new($Raw)
-        $Logger.Info("Parsed single IP $Raw → $($expr.Ip)")
+        if ($logger.ShouldLog("Info")) {
+        $Logger.Info("Parsed single IP $Raw → $($expr.Ip)") }
         return $expr
     } catch {
-        $Logger.Warn("Single IP parse failed for '$Raw': $_")
+        if ($logger.ShouldLog("Info")) {
+        $Logger.Info("Single IP parse failed for '$Raw': $_") }
     }
 
     $Logger.Warn("Unsupported expression: '$Raw'")
@@ -122,16 +129,19 @@ function Get-NormalizedRange {
             if ($null -eq $expr.Ip) { return $null }
             try {
                 $val = [IpNetwork]::ToUInt32([System.Net.IPAddress]$expr.Ip)
-                $Logger.Info("Normalizing single IP $($expr.Raw) → $val")
+                if ($logger.ShouldLog("Info")) {
+                $Logger.Info("Normalizing single IP $($expr.Raw) → $val") }
                 return @{Start=$val;End=$val}
             } catch {
-                $Logger.Warn("Normalization failed for single IP $($expr.Raw): $_")
+                if ($logger.ShouldLog("Info")) {
+                $Logger.Warn("Normalization failed for single IP $($expr.Raw): $_") }
                 return $null
             }
         }
         'RangeIpExpression' {
             if ($null -eq $expr.StartInt -or $null -eq $expr.EndInt) { return $null }
-            $Logger.Info("Normalizing range $($expr.Raw) → Start=$($expr.StartInt), End=$($expr.EndInt)")
+            if ($logger.ShouldLog("Info")) {
+            $Logger.Info("Normalizing range $($expr.Raw) → Start=$($expr.StartInt), End=$($expr.EndInt)") }
             return @{Start=$expr.StartInt;End=$expr.EndInt}
         }
        'CidrIpExpression' {
@@ -141,15 +151,17 @@ function Get-NormalizedRange {
 
         $start = [IpNetwork]::ToUInt32($netAddr)
         $end   = [IpNetwork]::ToUInt32($bcastAddr)
-
-        $Logger.Info("Normalizing CIDR $($expr.Raw) → Start=$start, End=$end")
+if ($logger.ShouldLog("Info")) {
+        $Logger.Info("Normalizing CIDR $($expr.Raw) → Start=$start, End=$end") }
         return @{Start=$start;End=$end}
     } catch {
-        $Logger.Warn("Normalization failed for CIDR $($expr.Raw): $_")
+        if ($logger.ShouldLog("Info")) {
+        $Logger.Warn("Normalization failed for CIDR $($expr.Raw): $_") }
         return $null
     }
 }
         default {
+            
             $Logger.Warn("Unknown expression type: $($expr.GetType().Name)")
             return $null
         }

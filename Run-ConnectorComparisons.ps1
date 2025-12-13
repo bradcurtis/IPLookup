@@ -6,8 +6,12 @@ if (-not ("Logger" -as [type])) {
     . (Join-Path $PSScriptRoot 'src\AllClasses.ps1')
 }
 
-# Set up logger
-$logger = [Logger]::new("Info", $false, "")
+# Set up logger for debug
+#$logger = [Logger]::new("Info", $false, "")
+
+#logger for batch runs
+$logPath = Join-Path $PSScriptRoot "logs\batch-$(Get-Date -Format 'yyyyMMdd-HHmmss').log"
+$logger = [Logger]::new("Warn", $true, $logPath)
 
 # Define input and output folders
 $inputFolder  = Join-Path $PSScriptRoot 'exports'
@@ -60,4 +64,13 @@ foreach ($group in $connectorGroups) {
     } catch {
         Write-Warning "Failed to compare"
     }
+}
+
+$reportsFolder = Join-Path $PSScriptRoot 'reports'
+$csvFiles = Get-ChildItem -Path $reportsFolder -Filter "*.csv" -File
+
+foreach ($file in $csvFiles) {
+    Write-Host "Cleaning file: $($file.Name)"
+    $filteredLines = Get-Content $file.FullName | Where-Object { -not ($_ -like '"Exact*') }
+    Set-Content -Path $file.FullName -Value $filteredLines
 }

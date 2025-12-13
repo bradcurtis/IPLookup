@@ -158,6 +158,8 @@ function Compare-IpFiles {
 
     if ($report.Count -gt 0) {
         $report | Export-Csv -Path $CsvPath -NoTypeInformation
-        $Logger.Info("CSV report written to ${CsvPath} with $($report.Count) entries")
+        $Logger.Warn("CSV report written to ${CsvPath} with $($report.Count) entries")
+    } else {
+        $Logger.Warn("No differences found; no report generated for file ${CsvPath} .")
     }
 }

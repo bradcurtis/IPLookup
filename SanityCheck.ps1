@@ -4,11 +4,12 @@
 . ".\src\AllClasses.ps1"
 
 # Create a logger stub
-class Logger {
-    [void] Info([string] $msg) { Write-Host "INFO: $msg" }
-    [void] Warn([string] $msg) { Write-Warning $msg }
-}
-$Logger = [Logger]::new()
+# Set up logger for debug
+#$logger = [Logger]::new("Info", $false, "")
+
+#logger for batch runs
+$logPath = Join-Path $PSScriptRoot "logs\batch-$(Get-Date -Format 'yyyyMMdd-HHmmss').log"
+$logger = [Logger]::new("Info", $true, $logPath)
 
 # Test expressions
 $tests = @(
