@@ -1,7 +1,7 @@
 # SanityCheck.ps1
 # Quick verification of New-IpExpression + Get-NormalizedRange
 
-. ".\src\AllClasses.ps1"
+. "..\src\AllClasses.ps1"
 
 # Create a logger stub
 # Set up logger for debug

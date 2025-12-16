@@ -1,7 +1,7 @@
 # SanityCompareFiles.ps1
 # Minimal harness to test CIDR vs equivalent range overlap
 
-. ".\src\AllClasses.ps1"
+. "..\src\AllClasses.ps1"
 
 # Use the real Logger class from Logger.ps1
 $Logger = [Logger]::new("Info", $false, "")
