@@ -1,5 +1,6 @@
 using namespace System
 
+# Simple helper to validate supported logging levels
 class LogLevel {
     static [string[]] $Levels = @('Error','Warn','Info','Debug')
 
@@ -8,6 +9,7 @@ class LogLevel {
     }
 }
 
+# Parameters container used by scripts to centralize configuration
 class Parameters {
     [string] $CsvPath
     [string] $LogLevel

@@ -1,4 +1,6 @@
 class ProjectConfig {
+    # Simple project configuration loader that reads key=value pairs
+    # (ignoring comments and blank lines) and exposes common settings
     [string] $Environment
     [string] $InputFolder
     [string] $OutputFolder

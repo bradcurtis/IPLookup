@@ -1,15 +1,16 @@
-# Minimal Logger stub
+# Minimal test harness to exercise expression parsing and normalization
+# This file is intended for local quick checks and demo purposes.
 class Logger {
     [void] Info([string] $msg) { Write-Host "INFO: $msg" }
     [void] Warn([string] $msg) { Write-Warning $msg }
 }
 $Logger = [Logger]::new()
 
-# Load classes
+# Load necessary helpers and types
 Add-Type -Path "$PSScriptRoot\IpNetworkNative.cs"
 . "$PSScriptRoot\IpExpressions.ps1"
 
-# Test cases
+# Example inputs to validate parsing behavior
 $tests = @(
     "192.168.1.10",
     "192.168.1.20-192.168.1.25",

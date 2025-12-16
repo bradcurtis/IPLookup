@@ -1,4 +1,22 @@
 function Analyze-IpExpressionFile {
+    <#
+    .SYNOPSIS
+    Analyze a single IP expression file for issues and produce a CSV report.
+
+    .DESCRIPTION
+    Performs several sanity checks on an expression file: overlapping
+    ranges, long runs of individual IPs that could be a range, and
+    small ranges/CIDRs that may be better flattened to single IPs.
+
+    .PARAMETER Path
+    Path to the input expression file to analyze.
+
+    .PARAMETER Logger
+    Logger instance for emitting info/warn messages.
+
+    .PARAMETER OutputFolder
+    Destination folder for any generated CSV reports.
+    #>
     param (
         [string]$Path,
         [Logger]$Logger,
@@ -29,7 +47,7 @@ function Analyze-IpExpressionFile {
         }
     }
 
-    # Detect overlaps
+    # Detect overlaps between normalized ranges
     $Logger.Info("Checking for overlapping entries...")
     for ($i = 0; $i -lt $normalized.Count; $i++) {
         for ($j = $i + 1; $j -lt $normalized.Count; $j++) {
@@ -50,7 +68,8 @@ function Analyze-IpExpressionFile {
         }
     }
 
-    # Detect >11 consecutive individual IPs
+    # Detect >11 consecutive individual IPs which may indicate a block
+    # that should be represented as a range for clarity and compactness
     $Logger.Info("Checking for >11 consecutive individual IPs...")
     $singles = $normalized | Where-Object { $_.IsSingle } | Sort-Object Start
     $group = @(); $last = $null
@@ -91,7 +110,8 @@ function Analyze-IpExpressionFile {
         $hasIssues = $true
     }
 
-    # Detect small ranges/CIDRs
+    # Detect small ranges or CIDRs that contain fewer than 11 IPs. These
+    # may be candidates for flattening into explicit IP entries.
     $Logger.Info("Checking for small ranges or CIDRs (<11 IPs)...")
     foreach ($entry in $normalized) {
         $count = [math]::Abs([uint32]$entry.End - [uint32]$entry.Start) + 1
@@ -111,7 +131,7 @@ function Analyze-IpExpressionFile {
         }
     }
 
-    # Write report
+    # Write report (if any issues were detected)
     $baseName = [System.IO.Path]::GetFileNameWithoutExtension($Path)
     $shortName = ($baseName -replace '^\d{4}-\d{2}-\d{2}-Relay-', '')
     $timestamp = Get-Date -Format "yyyyMMdd-HHmm"

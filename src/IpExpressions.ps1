@@ -1,6 +1,8 @@
 using namespace System
 using namespace System.Net
 
+# Base class representing a textual IP expression. Concrete subclasses
+# implement parsing and containment checks for single IPs, ranges, and CIDRs.
 class IpExpression {
     [string] $Raw
     IpExpression([string] $raw) { $this.Raw = $raw }
@@ -10,6 +12,7 @@ class IpExpression {
 }
 
 class SingleIpExpression : IpExpression {
+    # Represents a single explicit IP address
     [IPAddress] $Ip
     SingleIpExpression([string] $raw) : base($raw) {
         [IPAddress] $tmp = $null
@@ -22,6 +25,7 @@ class SingleIpExpression : IpExpression {
 }
 
 class RangeIpExpression : IpExpression {
+    # Represents a contiguous range of IPv4 addresses
     [IPAddress] $Start
     [IPAddress] $End
     [uint32]    $StartInt
@@ -56,6 +60,7 @@ class RangeIpExpression : IpExpression {
 }
 
 class CidrIpExpression : IpExpression {
+    # Encapsulates a CIDR block using the IpNetwork helper type
     [IpNetwork] $Network
 
     CidrIpExpression([string] $raw) : base($raw) {
@@ -70,6 +75,11 @@ class CidrIpExpression : IpExpression {
 }
 
 function New-IpExpression {
+    <#
+    Parse a raw expression string into a typed IpExpression subclass.
+    The function normalizes whitespace and common punctuation before
+    attempting CIDR, range, and single IP parses in that order.
+    #>
     param([string]$Raw,[Logger]$Logger)
 
     # Normalize input
@@ -79,8 +89,9 @@ function New-IpExpression {
     $Raw = $Raw -replace '\u00A0',' '       # replace non-breaking space
     $Raw = $Raw -replace '\r',''            # strip carriage returns
     $Raw = $Raw -replace '\s+',' '          # collapse whitespace
-     if ($logger.ShouldLog("Info")) {
-    $Logger.Info("Attempting to parse expression: '$Raw'") }
+    if ($logger.ShouldLog("Info")) {
+        $Logger.Info("Attempting to parse expression: '$Raw'")
+    }
 
     try {
         $Logger.Info("Trying CIDR parse: '$Raw'")
@@ -89,31 +100,38 @@ function New-IpExpression {
         return $expr
     } catch {
         if ($logger.ShouldLog("Info")) {
-        $Logger.Info("CIDR parse failed for '$Raw': $_") }
+            $Logger.Info("CIDR parse failed for '$Raw': $_")
+        }
     }
 
     try {
         if ($logger.ShouldLog("Info")) {
-        $Logger.Info("Trying range parse: '$Raw'") }
+            $Logger.Info("Trying range parse: '$Raw'")
+        }
         $expr = [RangeIpExpression]::new($Raw)
         if ($logger.ShouldLog("Info")) {
-        $Logger.Info("Parsed range $Raw → $($expr.Start)-$($expr.End)") }
+            $Logger.Info("Parsed range $Raw → $($expr.Start)-$($expr.End)")
+        }
         return $expr
     } catch {
         if ($logger.ShouldLog("Info")) {
-        $Logger.Info("Range parse failed for '$Raw': $_") }
+            $Logger.Info("Range parse failed for '$Raw': $_")
+        }
     }
 
     try {
         if ($logger.ShouldLog("Info")) {
-        $Logger.Info("Trying single IP parse: '$Raw'") }
+            $Logger.Info("Trying single IP parse: '$Raw'")
+        }
         $expr = [SingleIpExpression]::new($Raw)
         if ($logger.ShouldLog("Info")) {
-        $Logger.Info("Parsed single IP $Raw → $($expr.Ip)") }
+            $Logger.Info("Parsed single IP $Raw → $($expr.Ip)")
+        }
         return $expr
     } catch {
         if ($logger.ShouldLog("Info")) {
-        $Logger.Info("Single IP parse failed for '$Raw': $_") }
+            $Logger.Info("Single IP parse failed for '$Raw': $_")
+        }
     }
 
     $Logger.Warn("Unsupported expression: '$Raw'")
@@ -121,6 +139,11 @@ function New-IpExpression {
 }
 
 function Get-NormalizedRange {
+    <#
+    Convert an IpExpression into a normalized numeric Start/End pair
+    (32-bit unsigned integers) suitable for comparisons and overlap
+    detection. Returns $null on failure.
+    #>
     param([IpExpression]$expr, [Logger]$Logger)
 
     if ($null -eq $expr) { return $null }
@@ -130,18 +153,21 @@ function Get-NormalizedRange {
             try {
                 $val = [IpNetwork]::ToUInt32([System.Net.IPAddress]$expr.Ip)
                 if ($logger.ShouldLog("Info")) {
-                $Logger.Info("Normalizing single IP $($expr.Raw) → $val") }
+                    $Logger.Info("Normalizing single IP $($expr.Raw) → $val")
+                }
                 return @{Start=$val;End=$val}
             } catch {
                 if ($logger.ShouldLog("Info")) {
-                $Logger.Warn("Normalization failed for single IP $($expr.Raw): $_") }
+                    $Logger.Warn("Normalization failed for single IP $($expr.Raw): $_")
+                }
                 return $null
             }
         }
         'RangeIpExpression' {
             if ($null -eq $expr.StartInt -or $null -eq $expr.EndInt) { return $null }
             if ($logger.ShouldLog("Info")) {
-            $Logger.Info("Normalizing range $($expr.Raw) → Start=$($expr.StartInt), End=$($expr.EndInt)") }
+                $Logger.Info("Normalizing range $($expr.Raw) → Start=$($expr.StartInt), End=$($expr.EndInt)")
+            }
             return @{Start=$expr.StartInt;End=$expr.EndInt}
         }
        'CidrIpExpression' {
@@ -151,17 +177,18 @@ function Get-NormalizedRange {
 
         $start = [IpNetwork]::ToUInt32($netAddr)
         $end   = [IpNetwork]::ToUInt32($bcastAddr)
-if ($logger.ShouldLog("Info")) {
-        $Logger.Info("Normalizing CIDR $($expr.Raw) → Start=$start, End=$end") }
+        if ($logger.ShouldLog("Info")) {
+            $Logger.Info("Normalizing CIDR $($expr.Raw) → Start=$start, End=$end")
+        }
         return @{Start=$start;End=$end}
     } catch {
         if ($logger.ShouldLog("Info")) {
-        $Logger.Warn("Normalization failed for CIDR $($expr.Raw): $_") }
+            $Logger.Warn("Normalization failed for CIDR $($expr.Raw): $_")
+        }
         return $null
     }
 }
         default {
-            
             $Logger.Warn("Unknown expression type: $($expr.GetType().Name)")
             return $null
         }

@@ -1,10 +1,15 @@
 # CompareIpFiles.ps1
-# Utility functions to compare multiple IP expression CSV files
-# Reports exact matches, missing entries, and partial overlaps with line numbers and file names
-# Uses Logger for structured output
-# Builds a CSV report of Missing, Overlap, and Exact entries
+# Utilities to compare multiple IP expression files and generate a
+# CSV report describing Exact matches, Overlaps, and Missing entries.
+# The functions here use the Logger to emit progress and informational
+# messages and rely on the repository/normalization helpers.
 
 function Get-IpExpressionsFromFile {
+    <#
+    Read an expression file into an array of objects similar to the
+    repository helper. This local copy is used by the comparison
+    utilities to avoid depending directly on CsvRepository.
+    #>
     param([string]$Path,[Logger]$Logger)
     $results = @(); $i = 0
 
@@ -36,6 +41,12 @@ function Get-IpExpressionsFromFile {
 }
 
 function Compare-TwoIpFiles {
+    <#
+    Compare two sets of expression objects and append comparison rows to
+    the provided report reference. The function detects Exact matches
+    (same normalized range and same raw form), Overlaps (range overlap or
+    same range different form), and Missing entries.
+    #>
     param($exprs1,$exprs2,[string]$File1,[string]$File2,[Logger]$Logger,[ref]$Report)
 
     $exactCount = 0; $overlapCount = 0; $missingCount = 0

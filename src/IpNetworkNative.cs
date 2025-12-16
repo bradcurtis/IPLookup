@@ -1,6 +1,9 @@
 using System;
 using System.Net;
 
+// Small helper class providing CIDR parsing and utility functions used by
+// the PowerShell scripts. Implemented in C# for performance and precise
+// bitwise operations on IPv4 addresses.
 public class IpNetwork
 {
     public IPAddress NetworkAddress { get; private set; }
@@ -12,6 +15,7 @@ public class IpNetwork
     private uint maskInt;
     private uint broadcastInt;
 
+    // Construct from a CIDR string like "192.0.2.0/24"
     public IpNetwork(string cidr)
     {
         // Expects "x.x.x.x/n"
@@ -42,6 +46,7 @@ public class IpNetwork
         this.BroadcastAddress = FromUInt32(broadcastInt);
     }
 
+    // Check if the given IPv4 address is contained within this network
     public bool Contains(IPAddress ip)
     {
         if (ip.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork) return false;
@@ -49,6 +54,7 @@ public class IpNetwork
         return ipInt >= networkInt && ipInt <= broadcastInt;
     }
 
+    // Safe TryParse helper to avoid exceptions bubbling into PowerShell
     public static bool TryParse(string cidr, out IpNetwork net)
     {
         try
@@ -63,6 +69,7 @@ public class IpNetwork
         }
     }
 
+    // Convert IPAddress to 32-bit unsigned integer for easy arithmetic
     public static uint ToUInt32(IPAddress ip)
     {
         var bytes = ip.GetAddressBytes();
@@ -70,6 +77,7 @@ public class IpNetwork
         return BitConverter.ToUInt32(bytes, 0);
     }
 
+    // Convert 32-bit unsigned integer back to IPAddress
     public static IPAddress FromUInt32(uint value)
     {
         var bytes = BitConverter.GetBytes(value);
