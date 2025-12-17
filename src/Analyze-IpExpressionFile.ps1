@@ -47,24 +47,32 @@ function Analyze-IpExpressionFile {
         }
     }
 
-    # Detect overlaps between normalized ranges
+    # Detect overlaps between normalized ranges using a sort + sweep approach
+    # This reduces the complexity from O(n^2) to O(n log n) for sorting + O(n+m)
+    # for scanning, where m is number of overlapping pairs.
     $Logger.Info("Checking for overlapping entries...")
-    for ($i = 0; $i -lt $normalized.Count; $i++) {
-        for ($j = $i + 1; $j -lt $normalized.Count; $j++) {
-            $a = $normalized[$i]
-            $b = $normalized[$j]
-            if ($a.End -lt $b.Start -or $b.End -lt $a.Start) { continue }
-            $Logger.Warn("Overlap between line $($a.Line) and $($b.Line): $($a.Raw) <-> $($b.Raw)")
-            $report += [PSCustomObject]@{
-                ComparisonType        = "Overlap"
-                FileName              = $Path
-                LineText              = $a.Raw
-                LineNumber            = $a.Line
-                OverlappingText       = $b.Raw
-                OverlappingLineNumber = $b.Line
-                RangeBlockIssue       = ""
+    if ($normalized.Count -gt 1) {
+        $sorted = $normalized | Sort-Object Start, End
+        for ($i = 0; $i -lt $sorted.Count; $i++) {
+            $a = $sorted[$i]
+            # Compare forward only while the next item's Start is within a.End
+            $j = $i + 1
+            while ($j -lt $sorted.Count -and $sorted[$j].Start -le $a.End) {
+                $b = $sorted[$j]
+                # Overlap detected
+                $Logger.Warn("Overlap between line $($a.Line) and $($b.Line): $($a.Raw) <-> $($b.Raw)")
+                $report += [PSCustomObject]@{
+                    ComparisonType        = "Overlap"
+                    FileName              = $Path
+                    LineText              = $a.Raw
+                    LineNumber            = $a.Line
+                    OverlappingText       = $b.Raw
+                    OverlappingLineNumber = $b.Line
+                    RangeBlockIssue       = ""
+                }
+                $hasIssues = $true
+                $j++
             }
-            $hasIssues = $true
         }
     }
 

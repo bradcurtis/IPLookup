@@ -53,31 +53,31 @@ Describe 'Compare-IpFiles utility (multi-file)' {
     }
 
     It 'reports exact matches (192.168.1.10 present in all files)' {
-        ($report | Where-Object {
+        @( $report | Where-Object {
             $_.ComparisonType -eq "Exact" -and
             ($_.Expression1 -eq "192.168.1.10" -or $_.Expression2 -eq "192.168.1.10")
-        }).Count | Should -BeGreaterThan 0
+        } ).Count | Should -BeGreaterThan 0
     }
 
     It 'detects missing entries (8.8.8.8 only in file2)' {
-        ($report | Where-Object {
+        @( $report | Where-Object {
             $_.ComparisonType -eq "Missing" -and
             ($_.Expression1 -eq "8.8.8.8" -or $_.Expression2 -eq "8.8.8.8")
-        }).Count | Should -BeGreaterThan 0
+        } ).Count | Should -BeGreaterThan 0
     }
 
     It 'detects partial overlaps (20-25 vs 23-30 vs 20-22)' {
-        ($report | Where-Object {
+        @( $report | Where-Object {
             $_.ComparisonType -eq "Overlap" -and
             ($_.Expression1 -like "192.168.1.20*" -or $_.Expression2 -like "192.168.1.20*")
-        }).Count | Should -BeGreaterThan 0
+        } ).Count | Should -BeGreaterThan 0
     }
 
     It 'detects CIDR vs equivalent range (192.168.2.0/30 vs 192.168.2.0-192.168.2.3)' {
-        ($report | Where-Object {
+        @( $report | Where-Object {
             $_.ComparisonType -eq "Overlap" -and
             ($_.Expression1 -eq "192.168.2.0/30" -or $_.Expression2 -eq "192.168.2.0/30")
-        }).Count | Should -BeGreaterThan 0
+        } ).Count | Should -BeGreaterThan 0
     }
 
     It 'reports invalid lines gracefully (invalid-line-here)' {
@@ -86,14 +86,14 @@ Describe 'Compare-IpFiles utility (multi-file)' {
     }
 
     It 'detects unique entries (file3 has 1.1.1.1, file2 has 8.8.8.8)' {
-        ($report | Where-Object {
+        @( $report | Where-Object {
             $_.ComparisonType -eq "Missing" -and
             ($_.Expression1 -eq "1.1.1.1" -or $_.Expression2 -eq "1.1.1.1")
-        }).Count | Should -BeGreaterThan 0
+        } ).Count | Should -BeGreaterThan 0
 
-        ($report | Where-Object {
+        @( $report | Where-Object {
             $_.ComparisonType -eq "Missing" -and
             ($_.Expression1 -eq "8.8.8.8" -or $_.Expression2 -eq "8.8.8.8")
-        }).Count | Should -BeGreaterThan 0
+        } ).Count | Should -BeGreaterThan 0
     }
 }
