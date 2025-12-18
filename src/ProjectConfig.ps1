@@ -9,6 +9,13 @@ class ProjectConfig {
     [bool]   $EnableUpload
     [string] $SharePointSite
     [string] $TargetLibrary
+    [string] $ExportSourceType
+    [string] $ExportPath
+    [string] $SharePointUrl
+    [string] $LibraryName
+    [string] $LibrarySubFolder
+    [string] $SharePointTenant
+    [string] $SharePointProvider
     [Logger] $Logger
 
     ProjectConfig([string] $configPath, [Logger] $Logger) {
@@ -39,6 +46,27 @@ class ProjectConfig {
         $this.EnableUpload    = [bool]::Parse($dict["EnableUpload"])
         $this.SharePointSite  = $dict["SharePointSite"]
         $this.TargetLibrary   = $dict["TargetLibrary"]
+        
+        # Export source properties with explicit null checks
+        if ($null -eq $dict["ExportSourceType"] -or $dict["ExportSourceType"] -eq "") {
+            $this.ExportSourceType = "Local"
+        } else {
+            $this.ExportSourceType = $dict["ExportSourceType"]
+        }
+        if ($null -eq $dict["ExportPath"] -or $dict["ExportPath"] -eq "") {
+            $this.ExportPath = "exports"
+        } else {
+            $this.ExportPath = $dict["ExportPath"]
+        }
+        $this.SharePointUrl   = $dict["SharePointUrl"]
+        $this.LibraryName     = $dict["LibraryName"]
+        $this.LibrarySubFolder = $dict["LibrarySubFolder"]
+        $this.SharePointTenant = $dict["SharePointTenant"]
+        if ($null -eq $dict["SharePointProvider"] -or $dict["SharePointProvider"] -eq "") {
+            $this.SharePointProvider = "PnP"
+        } else {
+            $this.SharePointProvider = $dict["SharePointProvider"]
+        }
 
         $this.Logger.Info("Config loaded for environment: $($this.Environment)")
     }

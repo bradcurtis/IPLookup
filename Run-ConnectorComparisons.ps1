@@ -2,21 +2,53 @@
 # Compare IP range exports across servers grouped by connector type.
 
 # Load all classes and utilities (via consolidated loader)
-if (-not ("Logger" -as [type])) {
-    . (Join-Path $PSScriptRoot 'src\AllClasses.ps1')
+. (Join-Path $PSScriptRoot 'src\AllClasses.ps1')
+. (Join-Path $PSScriptRoot 'src\ExportSource.ps1')
+
+# Bootstrap logger (no file) for config loading
+$bootstrapLogger = [Logger]::new("Info", $false, "")
+$configPath = Join-Path $PSScriptRoot 'project.properties'
+$projectConfig = [ProjectConfig]::new($configPath, $bootstrapLogger)
+
+# Resolve folders from config
+function Resolve-PathRelativeToRoot {
+    param(
+        [string]$Root,
+        [string]$Path
+    )
+    if ([IO.Path]::IsPathRooted($Path)) { return $Path }
+    return (Join-Path $Root $Path)
 }
+
+$inputFolderPath  = if ($projectConfig.ExportPath   -and $projectConfig.ExportPath.Trim()   -ne '') { $projectConfig.ExportPath }   else { 'exports' }
+$outputFolderPath = if ($projectConfig.OutputFolder -and $projectConfig.OutputFolder.Trim() -ne '') { $projectConfig.OutputFolder } else { 'reports' }
+$logFolderPath    = if ($projectConfig.LogFolder    -and $projectConfig.LogFolder.Trim()    -ne '') { $projectConfig.LogFolder }    else { 'logs' }
+
+$inputFolder  = Resolve-PathRelativeToRoot -Root $PSScriptRoot -Path $inputFolderPath
+$outputFolder = Resolve-PathRelativeToRoot -Root $PSScriptRoot -Path $outputFolderPath
+$logFolder    = Resolve-PathRelativeToRoot -Root $PSScriptRoot -Path $logFolderPath
+
+if (-not (Test-Path $logFolder))    { New-Item -ItemType Directory -Path $logFolder | Out-Null }
+if (-not (Test-Path $outputFolder)) { New-Item -ItemType Directory -Path $outputFolder | Out-Null }
+if (-not (Test-Path $inputFolder))  { New-Item -ItemType Directory -Path $inputFolder | Out-Null }
 
 # Logger configuration for batch runs (file output)
-$logPath = Join-Path $PSScriptRoot "logs\batch-$(Get-Date -Format 'yyyyMMdd-HHmmss').log"
-$logger = [Logger]::new("Warn", $true, $logPath)
+$logPath = Join-Path $logFolder "batch-$(Get-Date -Format 'yyyyMMdd-HHmmss').log"
+$logger = [Logger]::new($projectConfig.LogLevel, $true, $logPath)
 
-# Define input and output folders
-$inputFolder  = Join-Path $PSScriptRoot 'exports'
-$outputFolder = Join-Path $PSScriptRoot 'reports'
-
-if (-not (Test-Path $outputFolder)) {
-    New-Item -ItemType Directory -Path $outputFolder | Out-Null
+# Prepare export source and download (SharePoint or Local)
+$exportSourceConfig = @{
+    ExportSourceType  = $projectConfig.ExportSourceType
+    ExportPath        = $inputFolder
+    SharePointUrl     = $projectConfig.SharePointUrl
+    LibraryName       = $projectConfig.LibraryName
+    LibrarySubFolder  = $projectConfig.LibrarySubFolder
+    SharePointTenant  = $projectConfig.SharePointTenant
+    SharePointProvider = $projectConfig.SharePointProvider
 }
+$exportSource = New-ExportSource -Config $exportSourceConfig
+Write-Host "Using export source: $($exportSource.Type)"
+$exportSource.DownloadExports($inputFolder)
 
 # Normalize input CSVs by trimming surrounding quotes from each line
 $files = Get-ChildItem -Path $inputFolder -Filter "*-IPRangeExport.csv" -File

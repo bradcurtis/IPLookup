@@ -1,20 +1,53 @@
 # Load dependencies and analysis helper
-if (-not ("Logger" -as [type])) {
-    . (Join-Path $PSScriptRoot 'src\AllClasses.ps1')
-}
+. (Join-Path $PSScriptRoot 'src\AllClasses.ps1')
+. (Join-Path $PSScriptRoot 'src\ExportSource.ps1')
 . (Join-Path $PSScriptRoot 'src\Analyze-IpExpressionFile.ps1')
 
-# Logger setup
-$logPath = Join-Path $PSScriptRoot "logs\analyze-allservers-$(Get-Date -Format 'yyyyMMdd-HHmmss').log"
-$logger = [Logger]::new("Warn", $true, $logPath)
+# Bootstrap logger (no file) for config loading
+$bootstrapLogger = [Logger]::new("Info", $false, "")
+$configPath = Join-Path $PSScriptRoot 'project.properties'
+$projectConfig = [ProjectConfig]::new($configPath, $bootstrapLogger)
 
-# Define input/output folders
-$inputFolder  = Join-Path $PSScriptRoot 'exports'
-$outputFolder = Join-Path $PSScriptRoot 'reports'
-
-if (-not (Test-Path $outputFolder)) {
-    New-Item -ItemType Directory -Path $outputFolder | Out-Null
+# Resolve folders from config (ExportPath/InputFolder/OutputFolder may be relative)
+function Resolve-PathRelativeToRoot {
+    param(
+        [string]$Root,
+        [string]$Path
+    )
+    if ([IO.Path]::IsPathRooted($Path)) { return $Path }
+    return (Join-Path $Root $Path)
 }
+
+$inputFolderPath  = if ($projectConfig.ExportPath  -and $projectConfig.ExportPath.Trim()  -ne '') { $projectConfig.ExportPath }  else { 'exports' }
+$outputFolderPath = if ($projectConfig.OutputFolder -and $projectConfig.OutputFolder.Trim() -ne '') { $projectConfig.OutputFolder } else { 'reports' }
+$logFolderPath    = if ($projectConfig.LogFolder   -and $projectConfig.LogFolder.Trim()   -ne '') { $projectConfig.LogFolder }   else { 'logs' }
+
+$inputFolder  = Resolve-PathRelativeToRoot -Root $PSScriptRoot -Path $inputFolderPath
+$outputFolder = Resolve-PathRelativeToRoot -Root $PSScriptRoot -Path $outputFolderPath
+$logFolder    = Resolve-PathRelativeToRoot -Root $PSScriptRoot -Path $logFolderPath
+
+if (-not (Test-Path $logFolder)) { New-Item -ItemType Directory -Path $logFolder | Out-Null }
+if (-not (Test-Path $outputFolder)) { New-Item -ItemType Directory -Path $outputFolder | Out-Null }
+if (-not (Test-Path $inputFolder)) { New-Item -ItemType Directory -Path $inputFolder | Out-Null }
+
+# Logger setup (file-based now that folders are known)
+$logPath = Join-Path $logFolder "analyze-allservers-$(Get-Date -Format 'yyyyMMdd-HHmmss').log"
+$logger = [Logger]::new($projectConfig.LogLevel, $true, $logPath)
+
+# Prepare export source and download (SharePoint or Local)
+$exportSourceConfig = @{
+    ExportSourceType  = $projectConfig.ExportSourceType
+    ExportPath        = $inputFolder
+    SharePointUrl     = $projectConfig.SharePointUrl
+    LibraryName       = $projectConfig.LibraryName
+    LibrarySubFolder  = $projectConfig.LibrarySubFolder
+    SharePointTenant  = $projectConfig.SharePointTenant
+    SharePointProvider = $projectConfig.SharePointProvider
+}
+$exportSource = New-ExportSource -Config $exportSourceConfig
+Write-Host "Using export source: $($exportSource.Type)"
+$exportSource.DownloadExports($inputFolder)
+
 
 # Find input files to analyze
 $matchingFiles = Get-ChildItem -Path $inputFolder -Filter "*-IPRangeExport.csv" -File
