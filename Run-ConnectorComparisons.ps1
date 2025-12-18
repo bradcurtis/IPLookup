@@ -96,7 +96,7 @@ foreach ($dg in $dateGroups) {
     foreach ($group in $connectorGroups) {
         $connector = $group.Name
         $files     = $group.Group.FullName
-        $csvPath   = Join-Path $dateFolder "$connector-ComparisonReport.csv"
+        $csvPath   = Join-Path $dateFolder "$connector-ComparisonReport-CC.csv"
 
         Write-Host "Comparing date=$date connector=$connector ($($files.Count) files)..."
         try {
