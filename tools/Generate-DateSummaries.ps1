@@ -19,30 +19,102 @@ if (-not $dateDirs -or $dateDirs.Count -eq 0) {
     return
 }
 
-$summaries = @()
+# Load all date directories and their issues
+$dateData = @{}
 foreach ($dir in $dateDirs) {
     $date = $dir.Name
     $groupedPath = Join-Path $dir.FullName 'GroupedIssues.csv'
-
-    $total = 0; $open = 0; $fixed = 0; $connectors = @(); $servers = @()
+    
     if (Test-Path $groupedPath) {
         $rows = Import-Csv -Path $groupedPath
-        $total = $rows.Count
-        $open = ($rows | Where-Object { ($_.Fixed -eq $null) -or ($_.Fixed -eq '') -or ($_.Fixed -eq 'False') -or ($_.Fixed -eq $false) }).Count
-        $fixed = ($rows | Where-Object { ($_.Fixed -ne $null) -and ($_.Fixed -ne '') -and ($_.Fixed -ne 'False') -and ($_.Fixed -ne $false) }).Count
-        $connectors = ($rows | Select-Object -ExpandProperty Connector -Unique) -join ', '
-        if ($rows | Get-Member -Name ServerName -MemberType NoteProperty -ErrorAction SilentlyContinue) {
-            $servers = ($rows | Select-Object -ExpandProperty ServerName -Unique) -join ', '
-        } else {
-            $servers = ''
-        }
+        $dateData[$date] = $rows
     } else {
-        # No grouped issues file, try to produce summary from IPExpression CSVs
-        $ipExprFiles = Get-ChildItem -Path $dir.FullName -Filter '*IPExpression*.csv' -File -ErrorAction SilentlyContinue
-        if ($ipExprFiles) {
-            $total = ($ipExprFiles | ForEach-Object { (Import-Csv $_.FullName).Count } | Measure-Object -Sum).Sum
-            $connectors = ($ipExprFiles | Select-Object -ExpandProperty BaseName -Unique) -join ', '
+        $dateData[$date] = @()
+    }
+}
+
+# Sort dates chronologically
+$sortedDates = $dateData.Keys | Sort-Object {[datetime]$_}
+
+# Track issues across dates and mark which were fixed
+$previousIssues = @{}
+foreach ($date in $sortedDates) {
+    $currentIssues = $dateData[$date]
+    
+    # Build a set of current issue keys (Connector + IssueType + Expression)
+    $currentKeys = @{}
+    foreach ($issue in $currentIssues) {
+        $key = "$($issue.Connector)|$($issue.IssueType)|$($issue.Expression)"
+        $currentKeys[$key] = $true
+    }
+    
+    # Check previous issues to see if they're fixed
+    if ($previousIssues.Count -gt 0) {
+        foreach ($issue in $currentIssues) {
+            $key = "$($issue.Connector)|$($issue.IssueType)|$($issue.Expression)"
+            
+            # If this issue was present in previous date and Fixed is not already set, mark as still open
+            if ($previousIssues.ContainsKey($key)) {
+                if (-not $issue.Fixed -or $issue.Fixed -eq '' -or $issue.Fixed -eq 'False' -or $issue.Fixed -eq $false) {
+                    # Issue persists from previous date
+                    $issue.Fixed = 'False'
+                }
+            }
         }
+        
+        # Find issues from previous date that are no longer present (were fixed)
+        foreach ($prevKey in $previousIssues.Keys) {
+            if (-not $currentKeys.ContainsKey($prevKey)) {
+                # Issue from previous date is now resolved - mark it in previous date's data
+                $parts = $prevKey -split '\|', 3
+                $prevIssue = $previousIssues[$prevKey]
+                if ($prevIssue -and (-not $prevIssue.Fixed -or $prevIssue.Fixed -eq '' -or $prevIssue.Fixed -eq 'False' -or $prevIssue.Fixed -eq $false)) {
+                    $prevIssue.Fixed = $date  # Mark with the date it was fixed
+                }
+            }
+        }
+    }
+    
+    # Update previous issues tracking
+    $previousIssues.Clear()
+    foreach ($issue in $currentIssues) {
+        $key = "$($issue.Connector)|$($issue.IssueType)|$($issue.Expression)"
+        $previousIssues[$key] = $issue
+    }
+}
+
+# Write updated GroupedIssues back to disk
+foreach ($date in $sortedDates) {
+    $dateFolder = Join-Path $reportsRoot $date
+    $groupedPath = Join-Path $dateFolder 'GroupedIssues.csv'
+    if ($dateData[$date] -and $dateData[$date].Count -gt 0) {
+        $dateData[$date] | Export-Csv -Path $groupedPath -NoTypeInformation -Force
+    }
+}
+
+# Generate summaries (reload from disk to get updated Fixed values)
+$summaries = @()
+foreach ($date in $sortedDates) {
+    $dateFolder = Join-Path $reportsRoot $date
+    $groupedPath = Join-Path $dateFolder 'GroupedIssues.csv'
+    
+    if (Test-Path $groupedPath) {
+        $rows = Import-Csv -Path $groupedPath
+    } else {
+        $rows = @()
+    }
+    
+    $total = $rows.Count
+    $openItems = @($rows | Where-Object { ($_.Fixed -eq $null) -or ($_.Fixed -eq '') -or ($_.Fixed -eq 'False') -or ($_.Fixed -eq $false) })
+    $fixedItems = @($rows | Where-Object { ($_.Fixed -ne $null) -and ($_.Fixed -ne '') -and ($_.Fixed -ne 'False') -and ($_.Fixed -ne $false) })
+    $open = $openItems.Count
+    $fixed = $fixedItems.Count
+    $connectors = ($rows | Select-Object -ExpandProperty Connector -Unique) -join ', '
+    
+    if ($rows | Get-Member -Name ServerName -MemberType NoteProperty -ErrorAction SilentlyContinue) {
+        $servers = ($rows | Select-Object -ExpandProperty ServerName -Unique) -join ', '
+    } else {
+        $servers = ''
     }
 
     $summaries += [PSCustomObject]@{
