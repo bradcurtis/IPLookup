@@ -28,36 +28,51 @@ foreach ($file in $files) {
     Set-Content -Path $file.FullName -Value $cleanedLines
 }
 
-# Collect files and group them by connector descriptor extracted from the
-# filename so we run comparisons per logical connector group.
+# Group files by date (YYYY-MM-DD) then by connector within each date.
 $allFiles = Get-ChildItem -Path $inputFolder -Filter "*-IPRangeExport.csv" -File
-$connectorGroups = $allFiles | Group-Object {
+$dateGroups = $allFiles | Group-Object {
     $base = $_.BaseName
-    if ($base -match '^\d{4}-\d{2}-\d{2}-[^-]+-[^-]+-(?<group>.+)-IPRangeExport$') {
-        $matches['group']
-    } else {
-        'Unknown'
+    if ($base -match '^(\d{4}-\d{2}-\d{2})') { $matches[1] } else { 'Unknown' }
+}
+
+Write-Host "Found date groups :"
+foreach ($dg in $dateGroups) { Write-Host "🔹 Date: $($dg.Name) — $($dg.Count) file(s)" }
+
+# For each date create a subfolder under reports, copy the exports there,
+# then run connector-grouped comparisons and write reports into that date folder.
+foreach ($dg in $dateGroups) {
+    $date = $dg.Name
+    $dateFolder = Join-Path $outputFolder $date
+    if (-not (Test-Path $dateFolder)) { New-Item -ItemType Directory -Path $dateFolder | Out-Null }
+
+    # Copy the source export files into the date folder for easy browsing
+    foreach ($f in $dg.Group) {
+        $dest = Join-Path $dateFolder $f.Name
+        Copy-Item -Path $f.FullName -Destination $dest -Force
     }
-}
 
-Write-Host "Found connector groups :"
-foreach ($group in $connectorGroups) {
-    Write-Host "🔹 Connector: $($group.Name) — $($group.Count) file(s)"
-}
+    # Group the files for this date by connector descriptor
+    $connectorGroups = $dg.Group | Group-Object {
+        $base = $_.BaseName
+        if ($base -match '^\d{4}-\d{2}-\d{2}-[^-]+-[^-]+-(?<group>.+)-IPRangeExport$') {
+            $matches['group']
+        } else {
+            'Unknown'
+        }
+    }
 
-# Run pairwise comparisons for each connector group and create reports
-foreach ($group in $connectorGroups) {
-    $connector = $group.Name
-    $files     = $group.Group.FullName
-    $csvPath   = Join-Path $outputFolder "$connector-ComparisonReport.csv"
+    foreach ($group in $connectorGroups) {
+        $connector = $group.Name
+        $files     = $group.Group.FullName
+        $csvPath   = Join-Path $dateFolder "$connector-ComparisonReport.csv"
 
-    Write-Host "Comparing connector : $connector ($($files.Count) files)..."
-
-    try {
-        Compare-IpFiles -Files $files -Logger $logger -CsvPath $csvPath
-        Write-Host "Report saved to : $csvPath"
-    } catch {
-        Write-Warning "Failed to compare"
+        Write-Host "Comparing date=$date connector=$connector ($($files.Count) files)..."
+        try {
+            Compare-IpFiles -Files $files -Logger $logger -CsvPath $csvPath
+            Write-Host "Report saved to : $csvPath"
+        } catch {
+            Write-Warning "Failed to compare $connector on $date : $_"
+        }
     }
 }
 
