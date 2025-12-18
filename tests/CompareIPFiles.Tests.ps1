@@ -14,6 +14,8 @@ BeforeAll {
     $global:file1 = Join-Path $env:TEMP "ips1.csv"
     $global:file2 = Join-Path $env:TEMP "ips2.csv"
     $global:file3 = Join-Path $env:TEMP "ips3.csv"
+    $global:fileSame1 = Join-Path $env:TEMP "ips-same1.csv"
+    $global:fileSame2 = Join-Path $env:TEMP "ips-same2.csv"
     $global:csvPath = Join-Path $env:TEMP "ComparisonReport.csv"
 
     @"
@@ -38,6 +40,14 @@ invalid-line-here
 192.168.3.0/29
 1.1.1.1
 "@ | Set-Content $file3
+
+@"
+10.160.40.150
+"@ | Set-Content $fileSame1
+
+@"
+10.160.40.150
+"@ | Set-Content $fileSame2
 }
 
 Describe 'Compare-IpFiles utility (multi-file)' {
@@ -95,5 +105,21 @@ Describe 'Compare-IpFiles utility (multi-file)' {
             $_.ComparisonType -eq "Missing" -and
             ($_.Expression1 -eq "8.8.8.8" -or $_.Expression2 -eq "8.8.8.8")
         } ).Count | Should -BeGreaterThan 0
+    }
+
+    It 'does not mark identical single IPs as missing' {
+        $tmp = Join-Path $env:TEMP "ComparisonReport-same.csv"
+        Compare-IpFiles -Files @($fileSame1, $fileSame2) -Logger $logger -CsvPath $tmp
+
+        if (Test-Path $tmp) {
+            $sameReport = Import-Csv $tmp
+        } else {
+            $exprsSame1 = Get-IpExpressionsFromFile -Path $fileSame1 -Logger $logger
+            $exprsSame2 = Get-IpExpressionsFromFile -Path $fileSame2 -Logger $logger
+            $sameReport = @()
+            Compare-TwoIpFiles -exprs1 $exprsSame1 -exprs2 $exprsSame2 -File1 $fileSame1 -File2 $fileSame2 -Logger $logger -Report ([ref]$sameReport)
+        }
+
+        @( $sameReport | Where-Object { $_.ComparisonType -eq "Missing" } ).Count | Should -Be 0
     }
 }

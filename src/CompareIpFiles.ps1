@@ -54,14 +54,24 @@ function Compare-TwoIpFiles {
     foreach ($entry in $exprs1) {
         $norm = Get-NormalizedRange $entry.Expression $Logger
         if ($null -eq $norm) { continue }
-        $list1 += [PSCustomObject]@{ Start = [uint32]$norm.Start; End = [uint32]$norm.End; Entry = $entry }
+        $list1 += [PSCustomObject]@{
+            Start   = [uint32]$norm.Start
+            End     = [uint32]$norm.End
+            Entry   = $entry
+            Matched = $false
+        }
     }
 
     $list2 = @()
     foreach ($entry in $exprs2) {
         $norm = Get-NormalizedRange $entry.Expression $Logger
         if ($null -eq $norm) { continue }
-        $list2 += [PSCustomObject]@{ Start = [uint32]$norm.Start; End = [uint32]$norm.End; Entry = $entry }
+        $list2 += [PSCustomObject]@{
+            Start   = [uint32]$norm.Start
+            End     = [uint32]$norm.End
+            Entry   = $entry
+            Matched = $false
+        }
     }
 
     # Sort by start address to allow efficient sweep / two-pointer algorithm
@@ -73,8 +83,17 @@ function Compare-TwoIpFiles {
 
     # Sweep through both lists to detect overlaps and exact matches.
     while ($i -lt $list1.Count -and $j -lt $list2.Count) {
+        # Skip list2 items that have already been matched with earlier entries
+        while ($j -lt $list2.Count -and $list2[$j].Matched) { $j++ }
+        if ($j -ge $list2.Count) { break }
+
         $a = $list1[$i]
         $b = $list2[$j]
+
+        if ($list1[$i].Matched) {
+            $i++
+            continue
+        }
 
         if ($a.End -lt $b.Start) {
             # a finishes before b starts -> no overlap for a
@@ -89,6 +108,10 @@ function Compare-TwoIpFiles {
         }
 
         if ($b.End -lt $a.Start) {
+            if ($list2[$j].Matched) {
+                $j++
+                continue
+            }
             # b finishes before a starts -> b does not overlap any 'a' at this position
             # so report it as missing in File1 (i.e. present in File2 only) and advance j.
             $Logger.Info("Missing in ${File1}: $($b.Entry.Expression.Raw)")
@@ -106,18 +129,21 @@ function Compare-TwoIpFiles {
         $foundAny = $false
         while ($k -lt $list2.Count -and $list2[$k].Start -le $a.End) {
             $b2 = $list2[$k]
+            if ($b2.Matched) { $k++; continue }
             if ($a.Start -eq $b2.Start -and $a.End -eq $b2.End) {
                 if ($a.Entry.Expression.Raw -eq $b2.Entry.Expression.Raw) {
                     $exactCount++
-                    if ($Logger.ShouldLog("Info")) {
-                        $Report.Value += [PSCustomObject]@{
-                            ComparisonType = "Exact"; File1 = $File1; Line1 = $a.Entry.Line; Expression1 = $a.Entry.Expression.Raw;
-                            File2 = $File2; Line2 = $b2.Entry.Line; Expression2 = $b2.Entry.Expression.Raw
-                        }
+                    $list1[$i].Matched = $true
+                    $b2.Matched = $true
+                    $Report.Value += [PSCustomObject]@{
+                        ComparisonType = "Exact"; File1 = $File1; Line1 = $a.Entry.Line; Expression1 = $a.Entry.Expression.Raw;
+                        File2 = $File2; Line2 = $b2.Entry.Line; Expression2 = $b2.Entry.Expression.Raw
                     }
                 } else {
                     $overlapCount++
                     $Logger.Info("Equal ranges, different forms: $($a.Entry.Expression.Raw) vs $($b2.Entry.Expression.Raw)")
+                    $list1[$i].Matched = $true
+                    $b2.Matched = $true
                     $Report.Value += [PSCustomObject]@{
                         ComparisonType = "Overlap"; File1 = $File1; Line1 = $a.Entry.Line; Expression1 = $a.Entry.Expression.Raw;
                         File2 = $File2; Line2 = $b2.Entry.Line; Expression2 = $b2.Entry.Expression.Raw
@@ -128,6 +154,8 @@ function Compare-TwoIpFiles {
                 # Partial overlap
                 $overlapCount++
                 $Logger.Info("Partial overlap: $($a.Entry.Expression.Raw) vs $($b2.Entry.Expression.Raw)")
+                $list1[$i].Matched = $true
+                $b2.Matched = $true
                 $Report.Value += [PSCustomObject]@{
                     ComparisonType = "Overlap"; File1 = $File1; Line1 = $a.Entry.Line; Expression1 = $a.Entry.Expression.Raw;
                     File2 = $File2; Line2 = $b2.Entry.Line; Expression2 = $b2.Entry.Expression.Raw
@@ -153,11 +181,13 @@ function Compare-TwoIpFiles {
     # Any remaining items in list1 are missing in file2
     while ($i -lt $list1.Count) {
         $a = $list1[$i]
-        $Logger.Info("Missing in ${File2}: $($a.Entry.Expression.Raw)")
-        $missingCount++
-        $Report.Value += [PSCustomObject]@{
-            ComparisonType = "Missing"; File1 = $File1; Line1 = $a.Entry.Line; Expression1 = $a.Entry.Expression.Raw;
-            File2 = $File2; Line2 = ""; Expression2 = ""
+        if (-not $a.Matched) {
+            $Logger.Info("Missing in ${File2}: $($a.Entry.Expression.Raw)")
+            $missingCount++
+            $Report.Value += [PSCustomObject]@{
+                ComparisonType = "Missing"; File1 = $File1; Line1 = $a.Entry.Line; Expression1 = $a.Entry.Expression.Raw;
+                File2 = $File2; Line2 = ""; Expression2 = ""
+            }
         }
         $i++
     }
@@ -165,11 +195,13 @@ function Compare-TwoIpFiles {
     # Any remaining items in list2 are missing in file1
     while ($j -lt $list2.Count) {
         $b = $list2[$j]
-        $Logger.Info("Missing in ${File1}: $($b.Entry.Expression.Raw)")
-        $missingCount++
-        $Report.Value += [PSCustomObject]@{
-            ComparisonType = "Missing"; File1 = $File2; Line1 = $b.Entry.Line; Expression1 = $b.Entry.Expression.Raw;
-            File2 = $File1; Line2 = ""; Expression2 = ""
+        if (-not $b.Matched) {
+            $Logger.Info("Missing in ${File1}: $($b.Entry.Expression.Raw)")
+            $missingCount++
+            $Report.Value += [PSCustomObject]@{
+                ComparisonType = "Missing"; File1 = $File2; Line1 = $b.Entry.Line; Expression1 = $b.Entry.Expression.Raw;
+                File2 = $File1; Line2 = ""; Expression2 = ""
+            }
         }
         $j++
     }
