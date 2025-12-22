@@ -17,6 +17,20 @@ Describe 'IpExpression parsing' {
         $expr.Raw | Should -Be '192.168.1.10'
     }
 
+    It 'parses double-quoted single IP' {
+        $expr = [IpExpressionFactory]::Create('"192.168.1.11"')
+        $expr.GetType().Name | Should -Be 'SingleIpExpression'
+        $expr.Contains([System.Net.IPAddress]::Parse('192.168.1.11')) | Should -BeTrue
+        $expr.Raw | Should -Be '192.168.1.11'
+    }
+
+    It 'parses single-quoted single IP' {
+        $expr = [IpExpressionFactory]::Create("'192.168.1.12'")
+        $expr.GetType().Name | Should -Be 'SingleIpExpression'
+        $expr.Contains([System.Net.IPAddress]::Parse('192.168.1.12')) | Should -BeTrue
+        $expr.Raw | Should -Be '192.168.1.12'
+    }
+
     It 'parses range' {
         $expr = [IpExpressionFactory]::Create('192.168.1.20-192.168.1.25')
         $expr.GetType().Name | Should -Be 'RangeIpExpression'

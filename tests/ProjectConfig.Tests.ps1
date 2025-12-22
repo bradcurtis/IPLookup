@@ -1,8 +1,8 @@
-# Load all types before discovery
-. ([scriptblock]::Create(". '$PSScriptRoot\..\src\AllClasses.ps1'"))
-
 Describe 'ProjectConfig' {
     BeforeAll {
+        if (-not ("Logger" -as [type])) {
+            . (Join-Path $PSScriptRoot '..\src\AllClasses.ps1')
+        }
         $tempFile = Join-Path $PSScriptRoot 'test-config.properties'
 
         @"

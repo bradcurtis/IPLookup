@@ -74,14 +74,15 @@ function Compare-TwoIpFiles {
         }
     }
 
-    # Sort by start address to allow efficient sweep / two-pointer algorithm
+    # Sort the entries so we can walk both lists from smallest to largest IP once
     $list1 = $list1 | Sort-Object Start, End
     $list2 = $list2 | Sort-Object Start, End
 
     $i = 0; $j = 0
     $exactCount = 0; $overlapCount = 0; $missingCount = 0
 
-    # Sweep through both lists to detect overlaps and exact matches.
+    # Walk through both sorted lists at the same time (the “sweep”)
+    # so we only compare ranges that could reasonably match.
     while ($i -lt $list1.Count -and $j -lt $list2.Count) {
         # Skip list2 items that have already been matched with earlier entries
         while ($j -lt $list2.Count -and $list2[$j].Matched) { $j++ }
@@ -96,7 +97,7 @@ function Compare-TwoIpFiles {
         }
 
         if ($a.End -lt $b.Start) {
-            # a finishes before b starts -> no overlap for a
+            # Current entry from file1 ends before file2 begins → it is missing from file2
             $Logger.Info("Missing in ${File2}: $($a.Entry.Expression.Raw)")
             $missingCount++
             $Report.Value += [PSCustomObject]@{
@@ -124,7 +125,7 @@ function Compare-TwoIpFiles {
             continue
         }
 
-        # Overlap exists: examine all b entries that overlap with a
+        # The ranges touch or overlap, so check every candidate in file2
         $k = $j
         $foundAny = $false
         while ($k -lt $list2.Count -and $list2[$k].Start -le $a.End) {

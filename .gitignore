@@ -6,3 +6,6 @@
 */data/
 out.txt
 tmp.csv
+tools/Legacy Connector flat.csv
+tools/Find-30900MissingInLegacy.ps1
+tools/LegacyMissingOn30900.csv

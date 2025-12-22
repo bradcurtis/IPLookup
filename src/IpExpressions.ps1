@@ -89,6 +89,11 @@ function New-IpExpression {
     $Raw = $Raw -replace '\u00A0',' '       # replace non-breaking space
     $Raw = $Raw -replace '\r',''            # strip carriage returns
     $Raw = $Raw -replace '\s+',' '          # collapse whitespace
+    if (($Raw.StartsWith('"') -and $Raw.EndsWith('"')) -and $Raw.Length -ge 2) {
+        $Raw = $Raw.Substring(1, $Raw.Length - 2).Trim()
+    } elseif (($Raw.StartsWith("'") -and $Raw.EndsWith("'")) -and $Raw.Length -ge 2) {
+        $Raw = $Raw.Substring(1, $Raw.Length - 2).Trim()
+    }
     if ($logger.ShouldLog("Info")) {
         $Logger.Info("Attempting to parse expression: '$Raw'")
     }
