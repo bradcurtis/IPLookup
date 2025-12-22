@@ -61,40 +61,65 @@ function Get-ExpressionType {
         'SingleIpExpression' { 'Single' }
         'RangeIpExpression'  { 'Range' }
         'CidrIpExpression'   { 'CIDR' }
-        default              { $Expression.GetType().Name }
+        Default              { 'Unknown' }
     }
 }
 
+# Helper: convert numeric IPv4 to dotted string
 function ConvertTo-IPv4 {
     param([uint32]$Value)
-
     $bytes = [System.BitConverter]::GetBytes($Value)
     if ([System.BitConverter]::IsLittleEndian) { [Array]::Reverse($bytes) }
     return ([System.Net.IPAddress]::new($bytes)).ToString()
 }
 
+# Helper: parse server and connector name from export filename
 function Get-ServerConnectorInfo {
     param([string]$FileName)
 
-    $base = [System.IO.Path]::GetFileNameWithoutExtension($FileName)
-    $server = 'UnknownServer'
-    $connector = 'UnknownConnector'
-
-    if ($base -match '^[0-9]{4}-[0-9]{2}-[0-9]{2}-Relay-(?<server>[^-]+)-(?<rest>.+)$') {
-        $server = $matches['server']
-        $rest = $matches['rest']
-        if ($rest -match '^(?<connector>.+)-IPRangeExport$') {
-            $connector = $matches['connector']
+    $name = [IO.Path]::GetFileName($FileName)
+    # Expect: YYYY-MM-DD-Relay-<server>-<connector>-IPRangeExport.csv (connector may contain dashes or be empty)
+    # Special case: YYYY-MM-DD-Relay-<server>-IPRangeExport.csv (no connector, just base file)
+    
+    $server = ''
+    $connector = ''
+    
+    # Try pattern with connector
+    $patternWithConnector = '^([0-9]{4}-[0-9]{2}-[0-9]{2})-Relay-([^-]+)-(.*)-IPRangeExport\.csv$'
+    if ($name -match $patternWithConnector) {
+        $server = $matches[2]
+        $connector = $matches[3]
+    } else {
+        # Try pattern without connector (base file)
+        $patternBaseFile = '^([0-9]{4}-[0-9]{2}-[0-9]{2})-Relay-([^-]+)-IPRangeExport\.csv$'
+        if ($name -match $patternBaseFile) {
+            $server = $matches[2]
+            $connector = 'IPRangeExport'
         } else {
-            $connector = $rest
+            # fallback: try to recover from parts
+            $parts = $name -split '-'
+            if ($parts.Count -ge 4) {
+                $server = $parts[3]  # After 'Relay-' token
+                $connector = ($parts[4..($parts.Count-2)] -join '-')
+                if ([string]::IsNullOrWhiteSpace($connector)) {
+                    $connector = 'IPRangeExport'
+                }
+            }
         }
     }
 
-    [PSCustomObject]@{ Server = $server; Connector = $connector }
+    return [PSCustomObject]@{
+        Server    = $server
+        Connector = $connector
+    }
 }
 
 function Compare-EntriesForServer {
-    param([object[]]$Entries)
+    param(
+        [object[]]$Entries,
+        [int]$ConsecutiveThreshold = 11,
+        [switch]$IncludeShortRuns
+    )
 
     $sorted = $Entries | Sort-Object Start, End, Connector, Line
     $results = @()
@@ -102,10 +127,26 @@ function Compare-EntriesForServer {
     for ($i = 0; $i -lt $sorted.Count; $i++) {
         $a = $sorted[$i]
         $j = $i + 1
-        while ($j -lt $sorted.Count -and $sorted[$j].Start -le $a.End) {
+        while ($j -lt $sorted.Count -and $sorted[$j].Start -le $a.End + $ConsecutiveThreshold + 1) {
             $b = $sorted[$j]
 
+            $overlaps = $b.Start -le $a.End
+            $gap = if ($overlaps) { 0 } else { $b.Start - $a.End - 1 }
+            if ($gap -gt $ConsecutiveThreshold) {
+                $j++
+                continue
+            }
+
+            # Skip consecutive gap detections for ranges (only report overlaps)
+            if (-not $overlaps) {
+                $j++
+                continue
+            }
+
             $relation = $null
+            $overlapStart = $null
+            $overlapEnd = $null
+
             if ($a.Start -eq $b.Start -and $a.End -eq $b.End) {
                 if ($a.Raw -eq $b.Raw) {
                     $relation = 'ExactDuplicate'
@@ -122,6 +163,10 @@ function Compare-EntriesForServer {
 
             $overlapStart = [uint32]([System.Math]::Max([uint64]$a.Start, [uint64]$b.Start))
             $overlapEnd   = [uint32]([System.Math]::Min([uint64]$a.End,   [uint64]$b.End))
+            
+            # Calculate IP counts for both primary and secondary
+            $primaryCount = [uint64]$a.End - [uint64]$a.Start + 1
+            $secondaryCount = [uint64]$b.End - [uint64]$b.Start + 1
 
             $results += [PSCustomObject]@{
                 Relation             = $relation
@@ -130,16 +175,85 @@ function Compare-EntriesForServer {
                 PrimaryLine          = $a.Line
                 PrimaryExpression    = $a.Raw
                 PrimaryType          = $a.Type
+                PrimaryIPCount       = $primaryCount
                 SecondaryConnector   = $b.Connector
                 SecondaryFile        = $b.File
                 SecondaryLine        = $b.Line
                 SecondaryExpression  = $b.Raw
                 SecondaryType        = $b.Type
-                OverlapStart         = ConvertTo-IPv4 $overlapStart
-                OverlapEnd           = ConvertTo-IPv4 $overlapEnd
+                SecondaryIPCount     = $secondaryCount
+                Gap                  = $null
+                OverlapStart         = if ($null -ne $overlapStart) { ConvertTo-IPv4 $overlapStart } else { $null }
+                OverlapEnd           = if ($null -ne $overlapStart) { ConvertTo-IPv4 $overlapEnd } else { $null }
             }
 
             $j++
+        }
+    }
+
+    # Detect runs of consecutive single IPs within each connector
+    $connectorGroups = $sorted | Group-Object Connector
+    foreach ($group in $connectorGroups) {
+        $entriesByConnector = $group.Group | Sort-Object Start, End, Line
+        $runStartIndex = 0
+        for ($k = 1; $k -lt $entriesByConnector.Count; $k++) {
+            $prev = $entriesByConnector[$k - 1]
+            $curr = $entriesByConnector[$k]
+
+            $isPrevSingle = $prev.Start -eq $prev.End
+            $isCurrSingle = $curr.Start -eq $curr.End
+            $isConsecutive = $isPrevSingle -and $isCurrSingle -and ($curr.Start -eq ($prev.End + 1))
+
+            if (-not $isConsecutive) {
+                $runLength = $k - $runStartIndex
+                if ($runLength -ge $ConsecutiveThreshold) {
+                    $first = $entriesByConnector[$runStartIndex]
+                    $last  = $entriesByConnector[$k - 1]
+                    $results += [PSCustomObject]@{
+                        Relation             = "ConsecutiveSingles-RunLength$runLength"
+                        PrimaryConnector     = $first.Connector
+                        PrimaryFile          = $first.File
+                        PrimaryLine          = $first.Line
+                        PrimaryExpression    = $first.Raw
+                        PrimaryType          = $first.Type
+                        PrimaryIPCount       = 1
+                        SecondaryConnector   = $last.Connector
+                        SecondaryFile        = $last.File
+                        SecondaryLine        = $last.Line
+                        SecondaryExpression  = $last.Raw
+                        SecondaryType        = $last.Type
+                        SecondaryIPCount     = 1
+                        Gap                  = 0
+                        OverlapStart         = $null
+                        OverlapEnd           = $null
+                    }
+                }
+                $runStartIndex = $k
+            }
+        }
+
+        $finalRunLength = $entriesByConnector.Count - $runStartIndex
+        if ($finalRunLength -ge $ConsecutiveThreshold) {
+            $first = $entriesByConnector[$runStartIndex]
+            $last  = $entriesByConnector[$entriesByConnector.Count - 1]
+            $results += [PSCustomObject]@{
+                Relation             = "ConsecutiveSingles-RunLength$finalRunLength"
+                PrimaryConnector     = $first.Connector
+                PrimaryFile          = $first.File
+                PrimaryLine          = $first.Line
+                PrimaryExpression    = $first.Raw
+                PrimaryType          = $first.Type
+                PrimaryIPCount       = 1
+                SecondaryConnector   = $last.Connector
+                SecondaryFile        = $last.File
+                SecondaryLine        = $last.Line
+                SecondaryExpression  = $last.Raw
+                SecondaryType        = $last.Type
+                SecondaryIPCount     = 1
+                Gap                  = 0
+                OverlapStart         = $null
+                OverlapEnd           = $null
+            }
         }
     }
 
@@ -222,7 +336,7 @@ foreach ($dg in $dateGroups) {
             continue
         }
 
-        $comparisonRows = Compare-EntriesForServer -Entries $entries
+        $comparisonRows = Compare-EntriesForServer -Entries $entries -ConsecutiveThreshold 11 -IncludeShortRuns
 
         if ($comparisonRows.Count -gt 0) {
             $csvPath = Join-Path $dateFolder ("{0}-ServerWide-Aggregated.csv" -f $server)
@@ -235,3 +349,4 @@ foreach ($dg in $dateGroups) {
 }
 
 Write-Host "\n✅ Server-wide aggregation complete. Log saved to: $logPath"
+        $comparisonRows = Compare-EntriesForServer -Entries $entries -ConsecutiveThreshold 11

@@ -9,3 +9,13 @@ tmp.csv
 tools/Legacy Connector flat.csv
 tools/Find-30900MissingInLegacy.ps1
 tools/LegacyMissingOn30900.csv
+sanity/results/detailed-results.csv
+sanity/results/summary.csv
+tools/Debug-MissingDuplicate.ps1
+tools/Generate-WorkOrderSummary.ps1
+tools/Reproduce-MissingDuplicate.ps1
+tools/Test-ExactDuplicateDetection.ps1
+sanity/Test-ServerWideComparisons.ps1
+sanity/Test-ServerWideComparisons-Updated.ps1
+sanity/Test-ServerWideComparisons-Fixed.ps1
+*.m
